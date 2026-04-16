@@ -8,7 +8,7 @@ import os
 import requests
 
 # 1. 기본 설정
-st.set_page_config(page_title="AE History Visualizer v6.5", layout="wide")
+st.set_page_config(page_title="AE History Visualizer v6.7", layout="wide")
 
 # 폰트 자동 로드
 @st.cache_data
@@ -31,24 +31,25 @@ st.markdown("""
     <style>
     header[data-testid="stHeader"] { visibility: hidden; }
     .stButton>button { width: 100%; border-radius: 8px; background-color: #FFB300; color: white; font-weight: bold; height: 3em; }
+    .stDataEditor { border: 2px solid #FFB300; border-radius: 8px; }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📝 AE History Visualizer v6.5")
+st.title("📝 AE History Visualizer v6.7")
 
 # 사이드바 메뉴
 menu = st.sidebar.radio("📋 메뉴 이동", ["광고주 DB 관리", "관리 이력 입력", "디지털 리포트 생성"])
 
 # --- 1. 광고주 DB 관리 ---
 if menu == "광고주 DB 관리":
-    st.header("📂 데이터 복구 및 등록")
+    st.header("📂 데이터 로드 및 관리")
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("🏢 광고주 리스트 업로드")
-        uploaded_clients = st.file_uploader("광고주 엑셀/CSV", type=['xlsx', 'csv'], key="clients")
+        uploaded_clients = st.file_uploader("광고주 리스트 (엑셀/CSV)", type=['xlsx', 'csv'], key="clients")
     with col2:
         st.subheader("💾 히스토리 백업 로드")
-        uploaded_history = st.file_uploader("백업 엑셀 파일 (.xlsx)", type=['xlsx'], key="history")
+        uploaded_history = st.file_uploader("백업 엑셀 파일", type=['xlsx'], key="history")
     
     if uploaded_clients:
         try:
@@ -56,14 +57,15 @@ if menu == "광고주 DB 관리":
             df.rename(columns={df.columns[0]: '광고주명'}, inplace=True)
             st.session_state.client_db = df
             st.success("✅ 광고주 리스트 로드 완료!")
-        except: st.error("파일 오류")
+        except: st.error("파일 확인 필요")
 
     if uploaded_history:
         try:
             h_df = pd.read_excel(uploaded_history)
+            if '날짜' in h_df.columns: h_df['날짜'] = pd.to_datetime(h_df['날짜']).dt.date
             st.session_state.history_db = h_df
-            st.success("✅ 히스토리가 성공적으로 복구되었습니다!")
-        except: st.error("백업 파일 오류")
+            st.success("✅ 히스토리 복구 완료!")
+        except: st.error("백업 파일 로드 실패")
 
 # --- 2. 관리 이력 입력 ---
 elif menu == "관리 이력 입력":
@@ -94,36 +96,12 @@ elif menu == "관리 이력 입력":
                 new_data = pd.DataFrame([[log_date, client, content, ", ".join(combined_tags)]], columns=['날짜', '광고주명', '소통내용', '핵심키워드'])
                 st.session_state.history_db = pd.concat([st.session_state.history_db, new_data], ignore_index=True)
                 st.rerun()
+
+        st.subheader("📋 최근 기록된 히스토리")
         st.dataframe(st.session_state.history_db.sort_values(by='날짜', ascending=False), use_container_width=True)
 
 # --- 3. 디지털 리포트 생성 ---
 elif menu == "디지털 리포트 생성":
-    st.header("📊 워드클라우드 분석")
+    st.header("📊 워드클라우드 및 실시간 데이터 수정")
     if st.session_state.history_db.empty:
-        st.info("기록된 데이터가 없습니다.")
-    else:
-        target_client = st.selectbox("대상 광고주", sorted(st.session_state.history_db['광고주명'].unique()))
-        period_opt = st.select_slider("기간", options=["7일", "15일", "한달", "분기"])
-        
-        days_delta = {"7일": 7, "15일": 15, "한달": 30, "분기": 90}[period_opt]
-        start_date = datetime.date.today() - datetime.timedelta(days=days_delta)
-        filtered_df = st.session_state.history_db[(st.session_state.history_db['광고주명'] == target_client)]
-        
-        if not filtered_df.empty:
-            text_data = (filtered_df['핵심키워드'].fillna('').str.cat(sep=' ') + " ") * 3 + filtered_df['소통내용'].fillna('').str.cat(sep=' ')
-            wc = WordCloud(font_path=FONT_PATH, width=900, height=500, background_color='white', colormap='Dark2').generate(text_data)
-            fig, ax = plt.subplots(figsize=(10, 6)); ax.imshow(wc); ax.axis('off')
-            st.pyplot(fig)
-            
-            # 🌟 버튼 2개 복구 (이미지 저장 / 엑셀 백업)
-            col1, col2 = st.columns(2)
-            
-            # 1. 이미지 저장 버튼
-            img_buf = BytesIO()
-            fig.savefig(img_buf, format="png", dpi=300, bbox_inches='tight')
-            col1.download_button(label="📥 리포트 이미지 저장", data=img_buf.getvalue(), file_name=f"Report_{target_client}.png", mime="image/png")
-            
-            # 2. 엑셀 백업 버튼
-            xlsx_buf = BytesIO()
-            st.session_state.history_db.to_excel(xlsx_buf, index=False)
-            col2.download_button(label="💾 전체 히스토리 백업(Excel) 저장", data=xlsx_buf.getvalue(), file_name=f"AE_History_Backup_{datetime.date.today()}.xlsx")
+        st
