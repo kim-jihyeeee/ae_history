@@ -5,15 +5,19 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 import datetime, os, requests, re
 from bs4 import BeautifulSoup
-from pptx import Presentation
-from pptx.util import Inches
+import google.generativeai as genai
 
-# 1. 페이지 설정 (메뉴 강제 확장 상태 유지)
+# 1. 페이지 설정 (메뉴 강제 고정)
 st.set_page_config(
-    page_title="AE Total Solution v9.7", 
+    page_title="AE Total Solution v10.1", 
     layout="wide",
     initial_sidebar_state="expanded" 
 )
+
+# 🌟 Gemini API 설정 (지혜님의 API 키를 여기에 넣어주세요!)
+API_KEY = "YOUR_GEMINI_API_KEY" 
+if API_KEY != "YOUR_GEMINI_API_KEY":
+    genai.configure(api_key=API_KEY)
 
 @st.cache_data
 def load_font():
@@ -30,25 +34,52 @@ FONT_PATH = load_font()
 if 'client_db' not in st.session_state: st.session_state.client_db = pd.DataFrame()
 if 'history_db' not in st.session_state: st.session_state.history_db = pd.DataFrame(columns=['날짜', '광고주명', '소통내용', '핵심키워드'])
 
-# 2. UI 스타일 (안내 박스 제거 및 깔끔한 레이아웃)
+# 2. UI 스타일
 st.markdown("""
     <style>
     header[data-testid="stHeader"] { visibility: hidden; }
-    [data-testid="stSidebarNav"] { display: block !important; }
-    [data-testid="collapsedControl"] { display: block !important; color: #FFB300 !important; }
-    
     .stButton>button { width: 100%; border-radius: 8px; background-color: #FFB300; color: white; font-weight: bold; height: 3em; }
+    .ai-box { padding: 20px; background-color: #f8f9fa; border-radius: 10px; border-left: 5px solid #4285F4; margin-bottom: 20px; line-height: 1.6; }
     .menu-header { font-size: 1.1em; font-weight: bold; color: #FFB300; margin-top: 35px; border-bottom: 2px solid #eee; padding-bottom: 5px; }
     .spacer { margin-bottom: 50px; }
     </style>
 """, unsafe_allow_html=True)
 
 # 3. 사이드바 구성
-st.sidebar.title("🚀 AE Total Tool v9.7")
+st.sidebar.title("🚀 AE Total Tool v10.1")
 st.sidebar.markdown('<p class="menu-header">📋 내부 히스토리 관리</p>', unsafe_allow_html=True)
 m_int = st.sidebar.radio("항목", ["광고주 DB 관리", "관리 이력 입력", "디지털 리포트(내부)"], label_visibility="collapsed")
 st.sidebar.markdown('<div class="spacer"></div>', unsafe_allow_html=True)
 st.sidebar.markdown('<p class="menu-header">📊 외부 시장 분석</p>', unsafe_allow_html=True)
-m_ext = st.sidebar.checkbox("📊 Trend Radar(듀얼 모드)")
+m_ext = st.sidebar.checkbox("📊 Trend Radar (AI)")
 
-menu = "📊 Trend Radar(외부)" if
+# 🌟 에러 수정된 부분: m_ext 조건문을 정확히 넣었습니다.
+menu = "📊 Trend Radar(외부)" if m_ext else m_int
+
+# --- [내부 로직 시작] ---
+
+if menu == "광고주 DB 관리":
+    st.header("📂 데이터 로드 및 관리")
+    c1, c2 = st.columns(2)
+    with c1: 
+        up_c = st.file_uploader("🏢 광고주 리스트 업로드", type=['xlsx', 'csv'], key="c_up")
+        if up_c:
+            df = pd.read_csv(up_c) if up_c.name.endswith('.csv') else pd.read_excel(up_c)
+            df.rename(columns={df.columns[0]: '광고주명'}, inplace=True)
+            st.session_state.client_db = df
+            st.success("로드 완료!")
+    with c2:
+        up_h = st.file_uploader("💾 히스토리 백업 로드", type=['xlsx'], key="h_up")
+        if up_h:
+            h_df = pd.read_excel(up_h)
+            if '날짜' in h_df.columns: h_df['날짜'] = pd.to_datetime(h_df['날짜']).dt.date
+            st.session_state.history_db = h_df
+            st.success("복구 완료!")
+
+elif menu == "관리 이력 입력":
+    st.header("✍️ 소통 이력 기록")
+    if st.session_state.client_db.empty: st.warning("먼저 광고주 리스트를 등록하세요.")
+    else:
+        q = st.text_input("🔍 업체명 검색")
+        all_c = sorted(st.session_state.client_db['광고주명'].dropna().unique())
+        filtered_c = [c for c in all_c if q.lower() in str(c).lower()]
