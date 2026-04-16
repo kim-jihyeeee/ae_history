@@ -106,4 +106,73 @@ elif menu == "관리 이력 입력":
         with st.form("history_form", clear_on_submit=True):
             c1, c2 = st.columns(2)
             with c1:
-                client =
+                client = st.selectbox(f"광고주 선택 ({len(filtered_clients)}건)", filtered_clients)
+                log_date = st.date_input("날짜", datetime.date.today())
+            with c2:
+                selected_hints = st.multiselect("🏷️ 자주 쓰는 키워드", options=existing_keywords)
+                manual_tags = st.text_input("➕ 직접 입력 (쉼표 구분)")
+            content = st.text_area("상세 내용", height=150)
+            if st.form_submit_button("히스토리 저장"):
+                combined_tags = list(set(selected_hints + [t.strip() for t in manual_tags.split(',') if t.strip()]))
+                new_data = pd.DataFrame([[log_date, client, content, ", ".join(combined_tags)]], columns=['날짜', '광고주명', '소통내용', '핵심키워드'])
+                st.session_state.history_db = pd.concat([st.session_state.history_db, new_data], ignore_index=True)
+                st.rerun()
+
+        st.divider()
+        if not st.session_state.history_db.empty:
+            st.subheader("🛠️ 전체 히스토리 편집기")
+            updated_history = st.data_editor(
+                st.session_state.history_db,
+                use_container_width=True,
+                num_rows="dynamic",
+                hide_index=True,
+                column_config={
+                    "날짜": st.column_config.DateColumn("날짜"),
+                    "소통내용": st.column_config.TextColumn("소통내용", width="large"),
+                    "핵심키워드": st.column_config.TextColumn("핵심키워드", width="medium")
+                }
+            )
+            if st.button("✅ 수정/삭제사항 최종 반영하기"):
+                st.session_state.history_db = updated_history
+                st.success("반영되었습니다!")
+                st.rerun()
+
+# --- 3. 디지털 리포트 생성 ---
+elif menu == "디지털 리포트 생성":
+    st.header("📊 워드클라우드 분석 리포트")
+    if st.session_state.history_db.empty:
+        st.info("기록된 데이터가 없습니다.")
+    else:
+        target_client = st.selectbox("대상 광고주 선택", sorted(st.session_state.history_db['광고주명'].unique()))
+        
+        # 🌟 디자인이 강화된 기간 선택 슬라이더
+        period_opt = st.select_slider(
+            "📍 분석 기간을 선택하세요 (좌우로 드래그)",
+            options=["7일", "15일", "한달", "분기"],
+            value="한달"
+        )
+        
+        days_delta = {"7일": 7, "15일": 15, "한달": 30, "분기": 90}[period_opt]
+        start_date = datetime.date.today() - datetime.timedelta(days=days_delta)
+        
+        filtered_df = st.session_state.history_db[
+            (st.session_state.history_db['광고주명'] == target_client) &
+            (pd.to_datetime(st.session_state.history_db['날짜']).dt.date >= start_date)
+        ]
+        
+        if not filtered_df.empty:
+            text_data = (filtered_df['핵심키워드'].fillna('').str.cat(sep=' ') + " ") * 3 + filtered_df['소통내용'].fillna('').str.cat(sep=' ')
+            wc = WordCloud(font_path=FONT_PATH, width=900, height=500, background_color='white', colormap='Dark2').generate(text_data)
+            fig, ax = plt.subplots(figsize=(10, 5)); ax.imshow(wc); ax.axis('off')
+            st.pyplot(fig)
+            
+            col1, col2 = st.columns(2)
+            img_buf = BytesIO()
+            fig.savefig(img_buf, format="png", dpi=300, bbox_inches='tight')
+            col1.download_button(label="📥 리포트 이미지 저장", data=img_buf.getvalue(), file_name=f"Report_{target_client}.png", mime="image/png")
+            
+            xlsx_buf = BytesIO()
+            st.session_state.history_db.to_excel(xlsx_buf, index=False)
+            col2.download_button(label="💾 전체 백업 저장", data=xlsx_buf.getvalue(), file_name="AE_History_Backup.xlsx")
+        else:
+            st.warning(f"최근 {period_opt} 동안 기록된 데이터가 없습니다.")
