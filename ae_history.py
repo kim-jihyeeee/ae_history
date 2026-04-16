@@ -7,10 +7,9 @@ import datetime, os, requests, re
 from bs4 import BeautifulSoup
 from pptx import Presentation
 from pptx.util import Inches
-from fpdf import FPDF
 
-# 1. 기본 설정 및 폰트
-st.set_page_config(page_title="AE Total Solution v8.4", layout="wide")
+# 1. 기본 설정 및 폰트 로드
+st.set_page_config(page_title="AE Total Solution v8.5", layout="wide")
 
 @st.cache_data
 def load_font():
@@ -38,7 +37,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 3. 사이드바 메뉴
-st.sidebar.title("🚀 AE Total Tool v8.4")
+st.sidebar.title("🚀 AE Total Tool v8.5")
 st.sidebar.markdown('<p class="menu-header">📋 내부 히스토리 관리</p>', unsafe_allow_html=True)
 m_int = st.sidebar.radio("항목", ["광고주 DB 관리", "관리 이력 입력", "디지털 리포트(내부)"], label_visibility="collapsed")
 st.sidebar.markdown('<div class="spacer"></div>', unsafe_allow_html=True)
@@ -47,7 +46,7 @@ m_ext = st.sidebar.checkbox("📊 Trend Radar(외부)")
 
 menu = "📊 Trend Radar(외부)" if m_ext else m_int
 
-# --- 내부 로직 ---
+# --- [내부 로직: 기존 기능 유지] ---
 if menu == "광고주 DB 관리":
     st.header("📂 데이터 로드 및 관리")
     c1, c2 = st.columns(2)
@@ -94,66 +93,52 @@ elif menu == "디지털 리포트(내부)":
             wc = WordCloud(font_path=FONT_PATH, width=800, height=400, background_color='white').generate(words)
             fig, ax = plt.subplots(); ax.imshow(wc); ax.axis('off'); st.pyplot(fig)
 
-# --- 🌟 Trend Radar 로직 (한글 우선 수집 및 PPT 에러 수정) ---
+# --- 🌟 Trend Radar 로직 (방어막 우회 및 정밀 수집) ---
 elif menu == "📊 Trend Radar(외부)":
-    st.header("🌐 실시간 트렌드 레이더 (Smart Search)")
-    st.info("💡 네이버와 구글 데이터를 교차 분석하여 정확한 트렌드를 수집합니다.")
+    st.header("🌐 실시간 트렌드 레이더 (Trend Search)")
+    st.info("💡 최신 뉴스 데이터를 정밀 분석하여 트렌드를 추출합니다.")
     
     c_in, c_pr = st.columns([3, 1])
-    with c_in: kw = st.text_input("분석 키워드", placeholder="예: 도라지정과, 비건 뷰티")
+    with c_in: kw = st.text_input("분석 키워드", placeholder="예: 무라벨 생수, 미세먼지")
     with c_pr: prd = st.selectbox("수집 범위", ["최근 7일", "최근 30일"])
 
-    if st.button("🔍 트렌드 데이터 분석 시작"):
+    if st.button("🔍 트렌드 분석 시작"):
         if not kw: st.warning("키워드를 입력하세요.")
         else:
-            with st.spinner("뉴스 데이터를 안전하게 수집 중입니다..."):
-                h = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+            with st.spinner("뉴스 데이터를 정밀 수집 중입니다..."):
+                h = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"}
                 
-                # 1. 네이버 뉴스로 먼저 시도 (한글 비중 높음)
-                url = f"https://search.naver.com/search.naver?where=news&query={kw}"
-                try:
-                    res = requests.get(url, headers=h, timeout=10)
-                    soup = BeautifulSoup(res.text, 'html.parser')
-                    items = soup.select('.news_tit, .news_dsc')
-                    news_txt = " ".join([i.get_text() for i in items if len(i.get_text()) > 5])
-                    
-                    # 🌟 보안 확인(캡차) 영어만 가득하면 구글로 우회
-                    if "Please click" in news_txt or len(re.findall(r'[가-힣]', news_txt)) < 10:
-                        url = f"https://www.google.com/search?q={kw}&tbm=nws&hl=ko"
-                        res = requests.get(url, headers=h, timeout=10)
-                        soup = BeautifulSoup(res.text, 'html.parser')
-                        items = soup.find_all(['h3', 'div'])
-                        news_txt = " ".join([i.get_text() for i in items if len(i.get_text()) > 10])
+                # 🌟 정밀 수집: 뉴스 제목과 요약문만 타겟팅 (로봇 방어용 문구 제외)
+                url = f"https://search.naver.com/search.naver?where=news&query={kw}&sort=0"
+                res = requests.get(url, headers=h, timeout=10)
+                soup = BeautifulSoup(res.text, 'html.parser')
+                
+                titles = [t.get_text() for t in soup.select('.news_tit')]
+                descs = [d.get_text() for d in soup.select('.news_dsc')]
+                news_txt = " ".join(titles + descs)
 
-                    if len(news_txt) < 30: 
-                        st.error("데이터 수집 실패. 키워드를 바꿔보세요!")
-                    else:
-                        wc_t = WordCloud(font_path=FONT_PATH, width=900, height=500, background_color='white', colormap='cool').generate(news_txt)
-                        fig_t, ax_t = plt.subplots(figsize=(10, 6))
-                        ax_t.imshow(wc_t, interpolation='bilinear'); ax_t.axis('off'); st.pyplot(fig_t)
-                        
-                        st.divider()
-                        d1, d2, d3 = st.columns(3)
-                        img_b = BytesIO(); fig_t.savefig(img_b, format="png", dpi=300)
-                        d1.download_button("📥 이미지 저장", data=img_b.getvalue(), file_name=f"Trend_{kw}.png")
-                        
-                        # 🌟 PPTX 에러 수정 완료 (가장 안전한 레이아웃 사용)
-                        try:
-                            prs = Presentation()
-                            blank_slide_layout = prs.slide_layouts[6] 
-                            slide = prs.slides.add_slide(blank_slide_layout)
-                            slide.shapes.add_picture(img_b, Inches(0.5), Inches(1), width=Inches(9))
-                            ppt_b = BytesIO(); prs.save(ppt_b)
-                            d2.download_button("📊 PPTX 제안서", data=ppt_b.getvalue(), file_name=f"Trend_{kw}.pptx")
-                        except:
-                            st.error("PPT 생성 환경 오류 (이미지/PDF를 이용해 주세요)")
-                        
-                        pdf = FPDF()
-                        pdf.add_page(); pdf.set_font("Arial", size=15)
-                        pdf.cell(200, 10, txt=f"Trend Report: {kw}", ln=True, align='C')
-                        tmp = "tmp.png"; fig_t.savefig(tmp)
-                        pdf.image(tmp, x=10, y=30, w=190)
-                        pdf_b = pdf.output(dest='S').encode('latin-1')
-                        d3.download_button("📄 PDF 리포트", data=pdf_b, file_name=f"Trend_{kw}.pdf")
-                        if os.path.exists(tmp): os.remove(tmp)
-                except Exception as e: st.error(f"오류 발생: {e}")
+                # 🌟 데이터 정화: 쓸데없는 시스템 문구 강제 삭제
+                trash_words = ["클릭하세요", "이동하시려면", "경우", "안에", "여기를", "Search", "Google", "feedback", "Please", "click", "accessing", "trouble", "within", "redirected", "seconds", "send"]
+                for tw in trash_words:
+                    news_txt = re.sub(tw, "", news_txt, flags=re.I)
+
+                if len(news_txt.strip()) < 30:
+                    st.error("뉴스를 충분히 가져오지 못했습니다. 키워드를 확인해 보세요!")
+                else:
+                    wc_t = WordCloud(font_path=FONT_PATH, width=900, height=500, background_color='white', colormap='cool').generate(news_txt)
+                    fig_t, ax_t = plt.subplots(figsize=(10, 6))
+                    ax_t.imshow(wc_t, interpolation='bilinear'); ax_t.axis('off'); st.pyplot(fig_t)
+                    
+                    st.divider()
+                    d1, d2 = st.columns(2)
+                    img_b = BytesIO(); fig_t.savefig(img_b, format="png", dpi=300)
+                    d1.download_button("📥 이미지 저장", data=img_b.getvalue(), file_name=f"Trend_{kw}.png")
+                    
+                    try:
+                        prs = Presentation()
+                        slide = prs.slides.add_slide(prs.slide_layouts[6])
+                        slide.shapes.add_picture(img_b, Inches(0.5), Inches(1), width=Inches(9))
+                        ppt_b = BytesIO(); prs.save(ppt_b)
+                        d2.download_button("📊 PPTX 제안서 저장", data=ppt_b.getvalue(), file_name=f"Trend_{kw}.pptx")
+                    except:
+                        st.error("PPT 생성 환경 오류")
