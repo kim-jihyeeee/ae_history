@@ -8,7 +8,7 @@ import os
 import requests
 
 # 1. 기본 설정
-st.set_page_config(page_title="AE History Visualizer v6.7", layout="wide")
+st.set_page_config(page_title="AE History Visualizer v6.8", layout="wide")
 
 # 폰트 자동 로드
 @st.cache_data
@@ -35,7 +35,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📝 AE History Visualizer v6.7")
+st.title("📝 AE History Visualizer v6.8")
 
 # 사이드바 메뉴
 menu = st.sidebar.radio("📋 메뉴 이동", ["광고주 DB 관리", "관리 이력 입력", "디지털 리포트 생성"])
@@ -69,10 +69,11 @@ if menu == "광고주 DB 관리":
 
 # --- 2. 관리 이력 입력 ---
 elif menu == "관리 이력 입력":
-    st.header("✍️ 소통 이력 기록")
+    st.header("✍️ 소통 이력 기록 및 실시간 수정")
     if st.session_state.client_db.empty:
         st.warning("먼저 '광고주 DB 관리' 메뉴에서 리스트를 등록해주세요.")
     else:
+        # 입력 폼 영역
         search_query = st.text_input("🔍 업체명 검색", placeholder="일부만 입력해도 필터링됩니다.")
         all_clients = sorted(st.session_state.client_db['광고주명'].dropna().unique())
         filtered_clients = [c for c in all_clients if search_query.lower() in str(c).lower()]
@@ -92,16 +93,4 @@ elif menu == "관리 이력 입력":
                 manual_tags = st.text_input("➕ 직접 입력 (쉼표 구분)")
             content = st.text_area("상세 내용", height=150)
             if st.form_submit_button("히스토리 저장"):
-                combined_tags = list(set(selected_hints + [t.strip() for t in manual_tags.split(',') if t.strip()]))
-                new_data = pd.DataFrame([[log_date, client, content, ", ".join(combined_tags)]], columns=['날짜', '광고주명', '소통내용', '핵심키워드'])
-                st.session_state.history_db = pd.concat([st.session_state.history_db, new_data], ignore_index=True)
-                st.rerun()
-
-        st.subheader("📋 최근 기록된 히스토리")
-        st.dataframe(st.session_state.history_db.sort_values(by='날짜', ascending=False), use_container_width=True)
-
-# --- 3. 디지털 리포트 생성 ---
-elif menu == "디지털 리포트 생성":
-    st.header("📊 워드클라우드 및 실시간 데이터 수정")
-    if st.session_state.history_db.empty:
-        st
+                combined_tags = list
