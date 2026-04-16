@@ -9,8 +9,7 @@ import os
 # 1. 기본 설정
 st.set_page_config(page_title="AE History Visualizer v5.2", layout="wide")
 
-# 🌟 폰트 설정 (공백이 있으면 인식이 안 될 수 있으니 주의하세요!)
-# 업로드하신 파일명이 "Hakgyoansim Badasseugi TTF L.ttf"라면 아래도 똑같이 맞춰야 합니다.
+# 🌟 지혜님이 업로드하신 폰트 파일명과 100% 일치하게 설정했습니다.
 FONT_NAME = "Hakgyoansim Badasseugi TTF L.ttf"
 
 # 세션 상태 초기화
@@ -71,13 +70,14 @@ elif menu == "관리 이력 입력":
 elif menu == "디지털 리포트 생성":
     st.header("📊 한글 워드클라우드 리포트")
     if st.session_state.history_db.empty:
-        st.info("데이터가 없습니다.")
+        st.info("데이터가 없습니다. 이력을 먼저 입력해주세요.")
     else:
         target = st.selectbox("대상 광고주", st.session_state.history_db['광고주명'].unique())
         period = st.select_slider("기간", options=["7일", "15일", "한달", "분기"])
         
-        days = {"7일": 7, "15일": 15, "한달": 30, "분기": 90}[period]
-        cutoff = datetime.date.today() - datetime.timedelta(days=days)
+        days = {"7일": 7, "15일": 15, "한달": 30, "분기": 90}
+        days_count = days[period]
+        cutoff = datetime.date.today() - datetime.timedelta(days=days_count)
         
         filtered = st.session_state.history_db[
             (st.session_state.history_db['광고주명'] == target) &
@@ -85,17 +85,16 @@ elif menu == "디지털 리포트 생성":
         ]
         
         if not filtered.empty:
-            # 🌟 한글 폰트 적용 및 워드클라우드 생성 🌟
-            # 핵심키워드에 가중치를 주기 위해 5번 반복해서 합칩니다.
-            text = (filtered['핵심키워드'].str.cat(sep=' ') + " ") * 5 + filtered['소통내용'].str.cat(sep=' ')
+            # 한글 텍스트 합치기 및 가중치 조절
+            text = (filtered['핵심키워드'].fillna('').str.cat(sep=' ') + " ") * 5 + filtered['소통내용'].fillna('').str.cat(sep=' ')
             
             if os.path.exists(FONT_NAME):
                 wc = WordCloud(
                     font_path=FONT_NAME,
                     width=800, height=500,
                     background_color='white',
-                    colormap='viridis',
-                    regexp=r"[\w\xA1-\xFE]+" # 한글 정규식 추가 (깨짐 방지 보조)
+                    colormap='Set2',
+                    regexp=r"[\w\xA1-\xFE]+" # 한글 단어 인식 정규식
                 ).generate(text)
                 
                 fig, ax = plt.subplots(figsize=(10, 6))
@@ -108,6 +107,6 @@ elif menu == "디지털 리포트 생성":
                 fig.savefig(buf, format="png", dpi=300)
                 st.download_button("📥 리포트 이미지 저장", buf.getvalue(), f"{target}_리포트.png", "image/png")
             else:
-                st.error(f"⚠️ '{FONT_NAME}' 폰트 파일을 찾을 수 없습니다. 파일명을 확인해주세요.")
+                st.error(f"⚠️ '{FONT_NAME}' 폰트 파일을 찾을 수 없습니다. 깃허브에 폰트가 있는지 확인해주세요.")
         else:
             st.warning("기간 내 데이터가 없습니다.")
