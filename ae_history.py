@@ -7,12 +7,12 @@ import datetime
 import os
 
 # 1. 기본 설정
-st.set_page_config(page_title="AE History Visualizer v5.8", layout="wide")
+st.set_page_config(page_title="AE History Visualizer v5.9", layout="wide")
 
 # 폰트 설정 (파일명: font.ttf)
 FONT_NAME = "font.ttf"
 
-# 세션 상태 초기화 (데이터 증발 방지용 임시 공간)
+# 세션 상태 초기화
 if 'client_db' not in st.session_state: st.session_state.client_db = pd.DataFrame()
 if 'history_db' not in st.session_state: st.session_state.history_db = pd.DataFrame(columns=['날짜', '광고주명', '소통내용', '핵심키워드'])
 
@@ -25,7 +25,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📝 AE History Visualizer v5.8")
+st.title("📝 AE History Visualizer v5.9")
 
 # 사이드바 메뉴
 menu = st.sidebar.radio("📋 메뉴 이동", ["광고주 DB 관리", "관리 이력 입력", "디지털 리포트 생성"])
@@ -85,5 +85,41 @@ elif menu == "관리 이력 입력":
                     st.session_state.history_db = pd.concat([st.session_state.history_db, new_data], ignore_index=True)
                     st.success(f"✅ {client}의 이력이 저장되었습니다.")
         
-        st.subheader("📊 현재 누적된 히스토리 (임시)")
-        st.dataframe(st.session_state.history_db.sort_values(by='날짜', ascending=False), use_container_width
+        st.subheader("📊 현재 누적된 히스토리")
+        st.dataframe(st.session_state.history_db.sort_values(by='날짜', ascending=False), use_container_width=True)
+
+# --- 3. 디지털 리포트 생성 ---
+elif menu == "디지털 리포트 생성":
+    st.header("📊 워드클라우드 분석 리포트")
+    if st.session_state.history_db.empty:
+        st.info("기록된 데이터가 없습니다.")
+    else:
+        target_client = st.selectbox("대상 광고주 선택", sorted(st.session_state.history_db['광고주명'].unique()))
+        period_opt = st.select_slider("분석 기간", options=["7일", "15일", "한달", "분기"])
+        
+        days_delta = {"7일": 7, "15일": 15, "한달": 30, "분기": 90}[period_opt]
+        start_date = datetime.date.today() - datetime.timedelta(days=days_delta)
+        
+        filtered_df = st.session_state.history_db[
+            (st.session_state.history_db['광고주명'] == target_client) &
+            (pd.to_datetime(st.session_state.history_db['날짜']).dt.date >= start_date)
+        ]
+        
+        if not filtered_df.empty:
+            text_data = (filtered_df['핵심키워드'].fillna('').str.cat(sep=' ') + " ") * 3 + filtered_df['소통내용'].fillna('').str.cat(sep=' ')
+            if os.path.exists(FONT_NAME):
+                wc = WordCloud(font_path=FONT_NAME, width=900, height=500, background_color='white', colormap='Dark2', regexp=r"[\w\xA1-\xFE]+").generate(text_data)
+                fig, ax = plt.subplots(figsize=(10, 6))
+                ax.imshow(wc, interpolation='bilinear'); ax.axis('off')
+                st.pyplot(fig)
+                
+                c1, c2 = st.columns(2)
+                img_buf = BytesIO()
+                fig.savefig(img_buf, format="png", dpi=300, bbox_inches='tight')
+                c1.download_button(label="📥 리포트 이미지 저장", data=img_buf.getvalue(), file_name=f"Report_{target_client}.png", mime="image/png")
+                
+                xlsx_buf = BytesIO()
+                st.session_state.history_db.to_excel(xlsx_buf, index=False)
+                c2.download_button(label="💾 히스토리 백업(Excel) 저장", data=xlsx_buf.getvalue(), file_name=f"AE_History_Backup.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            else:
+                st.error("폰트 파일을 찾을 수 없습니다.")
