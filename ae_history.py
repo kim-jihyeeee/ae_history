@@ -5,22 +5,24 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 import datetime
 import os
+import requests
 
 # 1. 기본 설정
-st.set_page_config(page_title="AE History Visualizer v6.1", layout="wide")
+st.set_page_config(page_title="AE History Visualizer v6.2", layout="wide")
 
-# 🌟 폰트 파일을 자동으로 찾는 함수 추가
-def get_font_path():
-    # 현재 폴더에 있는 모든 파일 목록을 가져옴
-    files = os.listdir('.')
-    # .ttf로 끝나는 파일을 찾음 (대소문자 무시)
-    font_files = [f for f in files if f.lower().endswith('.ttf')]
-    if font_files:
-        # 가장 먼저 발견된 ttf 파일을 반환 (font.ttf 혹은 원래 파일명)
-        return font_files[0]
-    return None
+# 🌟 폰트 해결: 나눔고딕 폰트를 인터넷에서 직접 가져옵니다.
+@st.cache_data
+def load_font():
+    font_url = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Bold.ttf"
+    font_res = requests.get(font_url)
+    with open("nanum_font.ttf", "wb") as f:
+        f.write(font_res.content)
+    return "nanum_font.ttf"
 
-FONT_PATH = get_font_path()
+try:
+    FONT_PATH = load_font()
+except:
+    FONT_PATH = None # 실패 시 기본 폰트 사용
 
 # 세션 상태 초기화
 if 'client_db' not in st.session_state: st.session_state.client_db = pd.DataFrame()
@@ -35,7 +37,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📝 AE History Visualizer v6.1")
+st.title("📝 AE History Visualizer v6.2")
 
 # 사이드바 메뉴
 menu = st.sidebar.radio("📋 메뉴 이동", ["광고주 DB 관리", "관리 이력 입력", "디지털 리포트 생성"])
@@ -128,25 +130,30 @@ elif menu == "디지털 리포트 생성":
             
             if not filtered_df.empty:
                 text_data = (filtered_df['핵심키워드'].fillna('').str.cat(sep=' ') + " ") * 3 + filtered_df['소통내용'].fillna('').str.cat(sep=' ')
-                if FONT_PATH:
-                    try:
-                        wc = WordCloud(font_path=FONT_PATH, width=900, height=500, background_color='white', colormap='Dark2', regexp=r"[\w\xA1-\xFE]+").generate(text_data)
-                        fig, ax = plt.subplots(figsize=(10, 6))
-                        ax.imshow(wc, interpolation='bilinear'); ax.axis('off')
-                        st.pyplot(fig)
-                        
-                        c1, c2 = st.columns(2)
-                        img_buf = BytesIO()
-                        fig.savefig(img_buf, format="png", dpi=300, bbox_inches='tight')
-                        c1.download_button(label="📥 리포트 이미지 저장", data=img_buf.getvalue(), file_name=f"Report_{target_client}.png", mime="image/png")
-                        
-                        xlsx_buf = BytesIO()
-                        st.session_state.history_db.to_excel(xlsx_buf, index=False)
-                        c2.download_button(label="💾 히스토리 백업 저장", data=xlsx_buf.getvalue(), file_name=f"AE_History_Backup.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                    except Exception as e:
-                        st.error(f"워드클라우드 생성 중 오류: {e}")
-                else:
-                    st.error("TTF 폰트 파일을 찾을 수 없습니다.")
+                try:
+                    # 🌟 폰트가 없으면 시스템 기본 폰트라도 쓰도록 설정
+                    wc = WordCloud(
+                        font_path=FONT_PATH, 
+                        width=900, height=500, 
+                        background_color='white', 
+                        colormap='Dark2', 
+                        regexp=r"[\w\xA1-\xFE]+"
+                    ).generate(text_data)
+                    
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    ax.imshow(wc, interpolation='bilinear'); ax.axis('off')
+                    st.pyplot(fig)
+                    
+                    c1, c2 = st.columns(2)
+                    img_buf = BytesIO()
+                    fig.savefig(img_buf, format="png", dpi=300, bbox_inches='tight')
+                    c1.download_button(label="📥 리포트 이미지 저장", data=img_buf.getvalue(), file_name=f"Report_{target_client}.png", mime="image/png")
+                    
+                    xlsx_buf = BytesIO()
+                    st.session_state.history_db.to_excel(xlsx_buf, index=False)
+                    c2.download_button(label="💾 히스토리 백업 저장", data=xlsx_buf.getvalue(), file_name=f"AE_History_Backup.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                except Exception as e:
+                    st.error(f"워드클라우드 생성 중 오류: {e}")
             else:
                 st.warning("데이터가 없습니다.")
         else:
