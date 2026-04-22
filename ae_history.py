@@ -9,16 +9,21 @@ import google.generativeai as genai
 
 # 1. 페이지 설정
 st.set_page_config(
-    page_title="AE Total Solution v10.4", 
+    page_title="AE Total Solution v10.6", 
     layout="wide",
     initial_sidebar_state="expanded" 
 )
 
-# 🌟 Gemini API 설정 (지혜님의 API 키를 넣어주세요)
+# 🌟 Gemini API 설정 (지혜님의 API 키 적용 완료)
 API_KEY = "AQ.Ab8RN6Lc9LYyyyi-oE7eVOZfjfe8AKJIQ8u3SnPmUce-LjoZRw" 
 
-if API_KEY != "AQ.Ab8RN6Lc9LYyyyi-oE7eVOZfjfe8AKJIQ8u3SnPmUce-LjoZRw":
-    genai.configure(api_key=API_KEY)
+# [수정] API 키가 있으면 즉시 설정되도록 변경
+if API_KEY:
+    try:
+        genai.configure(api_key=API_KEY)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+    except Exception as e:
+        st.error(f"API 설정 중 오류 발생: {e}")
 
 @st.cache_data
 def load_font():
@@ -40,13 +45,13 @@ st.markdown("""
     <style>
     header[data-testid="stHeader"] { visibility: hidden; }
     .stButton>button { width: 100%; border-radius: 8px; background-color: #FFB300; color: white; font-weight: bold; height: 3em; }
-    .ai-box { padding: 20px; background-color: #f8f9fa; border-radius: 10px; border-left: 5px solid #4285F4; margin-bottom: 20px; line-height: 1.6; }
+    .ai-box { padding: 20px; background-color: #f8f9fa; border-radius: 10px; border-left: 5px solid #4285F4; margin-bottom: 20px; line-height: 1.8; font-size: 1.05em; }
     .menu-header { font-size: 1.1em; font-weight: bold; color: #FFB300; margin-top: 35px; border-bottom: 2px solid #eee; padding-bottom: 5px; }
     </style>
 """, unsafe_allow_html=True)
 
 # 3. 사이드바
-st.sidebar.title("🚀 AE Total Tool v10.4")
+st.sidebar.title("🚀 AE Total Tool v10.6")
 st.sidebar.markdown('<p class="menu-header">📋 내부 히스토리 관리</p>', unsafe_allow_html=True)
 m_int = st.sidebar.radio("항목", ["광고주 DB 관리", "관리 이력 입력", "디지털 리포트(내부)"], label_visibility="collapsed")
 st.sidebar.markdown('<p class="menu-header">📊 외부 시장 분석</p>', unsafe_allow_html=True)
@@ -68,9 +73,7 @@ if menu == "광고주 DB 관리":
     with c2:
         up_h = st.file_uploader("💾 히스토리 백업 로드", type=['xlsx'], key="h_up")
         if up_h:
-            h_df = pd.read_excel(up_h)
-            st.session_state.history_db = h_df
-            # 🌟 에러 수정된 부분: 따옴표와 괄호를 정확히 닫았습니다.
+            st.session_state.history_db = pd.read_excel(up_h)
             st.success("복구 완료!")
 
 elif menu == "관리 이력 입력":
@@ -102,34 +105,50 @@ elif menu == "디지털 리포트(내부)":
             wc = WordCloud(font_path=FONT_PATH, width=900, height=500, background_color='white').generate(words)
             fig, ax = plt.subplots(); ax.imshow(wc); ax.axis('off'); st.pyplot(fig)
 
+# --- [외부 로직: Trend Radar AI 분석] ---
 elif menu == "📊 Trend Radar(외부)":
     st.header("🌐 AI Trend Radar 듀얼 모드")
     tab_n, tab_s = st.tabs(["📰 뉴스 에디션 (AI)", "🔍 검색 에디션 (AI)"])
     
     with tab_n:
-        kw_n = st.text_input("뉴스 분석 키워드", key="kw_n")
+        kw_n = st.text_input("뉴스 분석 키워드", key="kw_n", placeholder="예: 콘드로이친 효능")
         if st.button("🔍 뉴스 AI 분석 시작"):
-            rss = f"https://news.google.com/rss/search?q={kw_n}&hl=ko&gl=KR&ceid=KR:ko"
-            res = requests.get(rss)
-            items = BeautifulSoup(res.text, 'xml').find_all('item')[:25]
-            titles = [re.split(r' - | \| ', i.title.get_text())[0] for i in items]
-            if titles:
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                response = model.generate_content(f"'{kw_n}' 뉴스 요약 및 AE 전략 수립:\n" + "\n".join(titles))
-                st.markdown(f'<div class="ai-box">{response.text}</div>', unsafe_allow_html=True)
-                wc = WordCloud(font_path=FONT_PATH, width=900, height=400, background_color='white').generate(" ".join(titles))
-                fig, ax = plt.subplots(); ax.imshow(wc); ax.axis('off'); st.pyplot(fig)
-    
+            with st.spinner("AI가 최신 뉴스를 분석 중입니다..."):
+                rss = f"https://news.google.com/rss/search?q={kw_n}&hl=ko&gl=KR&ceid=KR:ko"
+                res = requests.get(rss)
+                items = BeautifulSoup(res.text, 'xml').find_all('item')[:20]
+                titles = [re.split(r' - | \| ', i.title.get_text())[0] for i in items]
+                
+                if titles:
+                    # AI 분석 실행
+                    prompt = f"다음 '{kw_n}' 관련 뉴스 제목들을 분석해 1)현재 트렌드 3줄 요약 2)소비자 니즈 3가지 3)광고 카피 제안을 해줘:\n\n" + "\n".join(titles)
+                    response = model.generate_content(prompt)
+                    st.markdown(f'<div class="ai-box"><b>🤖 뉴스 트렌드 리포트</b><br><br>{response.text}</div>', unsafe_allow_html=True)
+                    
+                    # 워드클라우드
+                    wc = WordCloud(font_path=FONT_PATH, width=900, height=400, background_color='white', colormap='cool').generate(" ".join(titles))
+                    fig, ax = plt.subplots(); ax.imshow(wc); ax.axis('off'); st.pyplot(fig)
+                else:
+                    st.error("데이터를 가져오지 못했습니다. 키워드를 변경해 보세요.")
+
     with tab_s:
-        kw_s = st.text_input("검색 분석 키워드", key="kw_s")
+        kw_s = st.text_input("검색 분석 키워드", key="kw_s", placeholder="예: 무라벨 생수 추천")
         if st.button("🔍 검색 AI 분석 시작"):
-            rss = f"https://news.google.com/rss/search?q={kw_s}&hl=ko&gl=KR&ceid=KR:ko"
-            res = requests.get(rss)
-            titles = [i.title.get_text() for i in BeautifulSoup(res.text, 'xml').find_all('item')]
-            if titles:
-                clean_txt = " ".join(re.findall(r'[가-힣]+', " ".join(titles)))
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                response = model.generate_content(f"'{kw_s}' 유저 관심사 분석:\n" + clean_txt)
-                st.markdown(f'<div class="ai-box">{response.text}</div>', unsafe_allow_html=True)
-                wc_s = WordCloud(font_path=FONT_PATH, width=900, height=400, background_color='white', colormap='YlOrRd').generate(clean_txt)
-                fig_s, ax_s = plt.subplots(); ax_s.imshow(wc_s); ax_s.axis('off'); st.pyplot(fig_s)
+            with st.spinner("AI가 소비자 검색 관심사를 분석 중입니다..."):
+                rss = f"https://news.google.com/rss/search?q={kw_s}&hl=ko&gl=KR&ceid=KR:ko"
+                res = requests.get(rss)
+                soup = BeautifulSoup(res.text, 'xml')
+                titles = [i.title.get_text() for i in soup.find_all('item')]
+                
+                if titles:
+                    clean_txt = " ".join(re.findall(r'[가-힣]+', " ".join(titles)))
+                    # AI 분석 실행
+                    prompt_s = f"다음은 '{kw_s}'에 대한 소비자 검색 데이터 요약이다. 유저들의 진짜 고민과 소구점을 마케팅 관점에서 분석해줘:\n\n" + clean_txt
+                    response_s = model.generate_content(prompt_s)
+                    st.markdown(f'<div class="ai-box"><b>🤖 검색 데이터 심층 분석</b><br><br>{response_s.text}</div>', unsafe_allow_html=True)
+                    
+                    # 워드클라우드
+                    wc_s = WordCloud(font_path=FONT_PATH, width=900, height=400, background_color='white', colormap='YlOrRd').generate(clean_txt)
+                    fig_s, ax_s = plt.subplots(); ax_s.imshow(wc_s); ax_s.axis('off'); st.pyplot(fig_s)
+                else:
+                    st.error("데이터를 가져오지 못했습니다. 키워드를 변경해 보세요.")
