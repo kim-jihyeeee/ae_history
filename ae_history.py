@@ -8,17 +8,30 @@ from bs4 import BeautifulSoup
 import google.generativeai as genai
 
 # 1. 페이지 설정
-st.set_page_config(page_title="AE Total Tool v11.9", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="AE Total Tool v12.0", layout="wide", initial_sidebar_state="expanded")
 
-# 🌟 Gemini API 설정 (안정적인 초기화 로직)
+# 🌟 Gemini API 설정 (모델 자동 탐색 로직 도입)
 API_KEY = "AQ.Ab8RN6Lc9LYyyyi-oE7eVOZfjfe8AKJIQ8u3SnPmUce-LjoZRw"
-if API_KEY:
+
+@st.cache_resource
+def init_ai_engine():
+    if not API_KEY: return None
     try:
         genai.configure(api_key=API_KEY)
-        # v1beta 에러 대응을 위한 표준 모델 명칭 사용
-        ai_engine = genai.GenerativeModel('gemini-1.5-flash')
-    except:
-        ai_engine = None
+        # 🌟 지혜님 계정에서 사용 가능한 모델 리스트를 탐색하여 가장 적합한 것을 자동 선택합니다.
+        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        
+        # 1.5-flash -> 1.0-pro -> gemini-pro 순으로 우선순위 탐색
+        target_model = 'models/gemini-1.5-flash'
+        if target_model not in available_models:
+            target_model = next((m for m in available_models if 'gemini-1.5' in m), 
+                           next((m for m in available_models if 'gemini-pro' in m), available_models[0]))
+        
+        return genai.GenerativeModel(target_model)
+    except Exception as e:
+        return None
+
+ai_engine = init_ai_engine()
 
 @st.cache_data
 def load_font():
@@ -46,7 +59,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 3. 사이드바
-st.sidebar.title("🚀 AE Total Tool v11.9")
+st.sidebar.title("🚀 AE Total Tool v12.0")
 st.sidebar.markdown('<p class="menu-header">📋 내부 히스토리 관리</p>', unsafe_allow_html=True)
 m_int = st.sidebar.radio("항목", ["광고주 DB 관리", "관리 이력 입력", "디지털 리포트(내부)"], label_visibility="collapsed")
 st.sidebar.markdown('<div style="margin-bottom: 50px;"></div>', unsafe_allow_html=True)
@@ -55,7 +68,7 @@ m_ext = st.sidebar.checkbox("📊 Trend Radar (AI)", value=True)
 
 menu = "📊 Trend Radar(외부)" if m_ext else m_int
 
-# [내부 데이터 관리]
+# [내부 데이터 관리 로직]
 if menu == "광고주 DB 관리":
     st.header("📂 데이터 로드 및 관리")
     c1, c2 = st.columns(2)
@@ -107,44 +120,44 @@ elif menu == "디지털 리포트(내부)":
             wc = WordCloud(font_path=FONT_PATH, width=900, height=500, background_color='white').generate(words)
             fig, ax = plt.subplots(); ax.imshow(wc); ax.axis('off'); st.pyplot(fig)
 
-# --- [외부 Trend Radar - 에러 해결 버전] ---
+# --- [외부 Trend Radar - 자동 탐색 AI 엔진 적용] ---
 elif menu == "📊 Trend Radar(외부)":
-    st.header("🌐 AI Trend Radar v11.9")
+    st.header("🌐 AI Trend Radar v12.0")
     t_news, t_srch = st.tabs(["📰 뉴스 AI 분석", "🔍 검색 AI 분석"])
     
     with t_news:
         c1, c2 = st.columns([3, 1])
-        with c1: kw_n = st.text_input("뉴스 키워드", key="kn_v119")
-        with c2: prd_n = st.selectbox("수집 기간", ["3일", "7일", "30일", "90일"], key="pn_v119")
+        with c1: kw_n = st.text_input("뉴스 키워드", key="kn_v12")
+        with c2: prd_n = st.selectbox("수집 기간", ["3일", "7일", "30일", "90일"], key="pn_v12")
         if st.button("📰 뉴스 AI 분석 시작"):
-            with st.spinner("AI 분석 리포트 생성 중..."):
+            with st.spinner("최적의 모델을 찾아 트렌드 분석 중..."):
                 rss = f"https://news.google.com/rss/search?q={kw_n}&hl=ko&gl=KR&ceid=KR:ko"
-                items = BeautifulSoup(requests.get(rss).text, 'xml').find_all('item')[:20]
+                items = BeautifulSoup(requests.get(rss).text, 'xml').find_all('item')[:15]
                 titles = [re.split(r' - | \| ', i.title.get_text())[0] for i in items]
                 if titles:
                     if ai_engine:
                         try:
-                            # 🌟 AE 전략 리포트 생성
-                            resp = ai_engine.generate_content(f"키워드 '{kw_n}' 최신 뉴스 제목 요약 및 마케팅 소구점 제안:\n\n" + "\n".join(titles))
+                            resp = ai_engine.generate_content(f"키워드 '{kw_n}' 관련 뉴스 제목들 분석. AE 전략 3줄 요약:\n\n" + "\n".join(titles))
                             st.markdown(f'<div class="ai-report-card"><b>🤖 AI 트렌드 리포트</b><br><br>{resp.text}</div>', unsafe_allow_html=True)
                         except Exception as e: st.error(f"AI 호출 오류: {e}")
+                    else: st.warning("사용 가능한 AI 모델을 찾지 못했습니다.")
                     wc = WordCloud(font_path=FONT_PATH, width=900, height=450, background_color='white').generate(" ".join(titles))
                     fig, ax = plt.subplots(); ax.imshow(wc); ax.axis('off'); st.pyplot(fig)
 
     with t_srch:
         cs1, cs2 = st.columns([3, 1])
-        with cs1: kw_s = st.text_input("검색 키워드", key="ks_v119")
-        with cs2: prd_s = st.selectbox("수집 기간", ["3일", "7일", "30일", "90일"], key="ps_v119")
+        with cs1: kw_s = st.text_input("검색 키워드", key="ks_v12")
+        with cs2: prd_s = st.selectbox("수집 기간", ["3일", "7일", "30일", "90일"], key="ps_v12")
         if st.button("🔍 검색 AI 분석 시작"):
-            with st.spinner("소비자 관심 분석 중..."):
+            with st.spinner("소비자 고민 분석 중..."):
                 rss_s = f"https://news.google.com/rss/search?q={kw_s}&hl=ko&gl=KR&ceid=KR:ko"
-                items_s = BeautifulSoup(requests.get(rss_s).text, 'xml').find_all('item')[:20]
+                items_s = BeautifulSoup(requests.get(rss_s).text, 'xml').find_all('item')[:15]
                 titles_s = [i.title.get_text() for i in items_s]
                 if titles_s:
                     clean = " ".join(re.findall(r'[가-힣]+', " ".join(titles_s)))
                     if ai_engine:
                         try:
-                            resp_s = ai_engine.generate_content(f"'{kw_s}' 유저 관심사 분석 및 마케팅 전략:\n\n" + clean)
+                            resp_s = ai_engine.generate_content(f"'{kw_s}' 검색어 기반 유저 고민과 니즈 분석:\n\n" + clean)
                             st.markdown(f'<div class="ai-report-card"><b>🤖 소비자 관심 분석 AI 리포트</b><br><br>{resp_s.text}</div>', unsafe_allow_html=True)
                         except Exception as e: st.error(f"AI 호출 오류: {e}")
                     wc_s = WordCloud(font_path=FONT_PATH, width=900, height=450, background_color='white', colormap='YlOrRd').generate(clean)
