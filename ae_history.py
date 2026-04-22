@@ -8,15 +8,15 @@ from bs4 import BeautifulSoup
 import google.generativeai as genai
 
 # 1. 페이지 설정
-st.set_page_config(page_title="AE Total Tool v11.7", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="AE Total Tool v11.8", layout="wide", initial_sidebar_state="expanded")
 
-# 🌟 Gemini API 설정 (가장 호환성이 높은 모델명으로 교체)
+# 🌟 Gemini API 설정 (호환성 에러 해결을 위한 명시적 경로 지정)
 API_KEY = "AQ.Ab8RN6Lc9LYyyyi-oE7eVOZfjfe8AKJIQ8u3SnPmUce-LjoZRw"
 if API_KEY:
     try:
         genai.configure(api_key=API_KEY)
-        # 🌟 v1beta에서도 가장 확실하게 인식되는 'gemini-pro' 명칭을 사용합니다.
-        ai_engine = genai.GenerativeModel('gemini-pro')
+        # 🌟 'models/' 접두사를 붙여 v1beta에서도 경로를 강제로 찾게 설정합니다.
+        ai_engine = genai.GenerativeModel('models/gemini-1.5-flash')
     except:
         ai_engine = None
 
@@ -46,7 +46,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 3. 사이드바
-st.sidebar.title("🚀 AE Total Tool v11.7")
+st.sidebar.title("🚀 AE Total Tool v11.8")
 st.sidebar.markdown('<p class="menu-header">📋 내부 히스토리 관리</p>', unsafe_allow_html=True)
 m_int = st.sidebar.radio("항목", ["광고주 DB 관리", "관리 이력 입력", "디지털 리포트(내부)"], label_visibility="collapsed")
 st.sidebar.markdown('<div style="margin-bottom: 50px;"></div>', unsafe_allow_html=True)
@@ -107,15 +107,15 @@ elif menu == "디지털 리포트(내부)":
             wc = WordCloud(font_path=FONT_PATH, width=900, height=500, background_color='white').generate(words)
             fig, ax = plt.subplots(); ax.imshow(wc); ax.axis('off'); st.pyplot(fig)
 
-# --- [외부 Trend Radar - 모델 호환성 수정 완료] ---
+# --- [외부 Trend Radar - 모델 경로 강제 지정 완료] ---
 elif menu == "📊 Trend Radar(외부)":
-    st.header("🌐 AI Trend Radar v11.7")
+    st.header("🌐 AI Trend Radar v11.8")
     t_news, t_srch = st.tabs(["📰 뉴스 AI 분석", "🔍 검색 AI 분석"])
     
     with t_news:
         c1, c2 = st.columns([3, 1])
-        with c1: kw_n = st.text_input("뉴스 키워드", key="kn_v117")
-        with c2: prd_n = st.selectbox("수집 기간", ["3일", "7일", "30일", "90일"], key="pn_v117")
+        with c1: kw_n = st.text_input("뉴스 키워드", key="kn_v118")
+        with c2: prd_n = st.selectbox("수집 기간", ["3일", "7일", "30일", "90일"], key="pn_v118")
         if st.button("📰 뉴스 AI 분석 시작"):
             with st.spinner("AI 분석 리포트 생성 중..."):
                 rss = f"https://news.google.com/rss/search?q={kw_n}&hl=ko&gl=KR&ceid=KR:ko"
@@ -133,8 +133,8 @@ elif menu == "📊 Trend Radar(외부)":
 
     with t_srch:
         cs1, cs2 = st.columns([3, 1])
-        with cs1: kw_s = st.text_input("검색 키워드", key="ks_v117")
-        with cs2: prd_s = st.selectbox("수집 기간", ["3일", "7일", "30일", "90일"], key="ps_v117")
+        with cs1: kw_s = st.text_input("검색 키워드", key="ks_v118")
+        with cs2: prd_s = st.selectbox("수집 기간", ["3일", "7일", "30일", "90일"], key="ps_v118")
         if st.button("🔍 검색 AI 분석 시작"):
             with st.spinner("소비자 니즈 분석 중..."):
                 rss_s = f"https://news.google.com/rss/search?q={kw_s}&hl=ko&gl=KR&ceid=KR:ko"
