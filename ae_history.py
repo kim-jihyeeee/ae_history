@@ -8,30 +8,19 @@ from bs4 import BeautifulSoup
 import google.generativeai as genai
 
 # 1. 페이지 설정
-st.set_page_config(page_title="AE Total Tool v12.0", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="AE Total Tool v12.1", layout="wide", initial_sidebar_state="expanded")
 
-# 🌟 Gemini API 설정 (모델 자동 탐색 로직 도입)
+# 🌟 Gemini API 설정
 API_KEY = "AQ.Ab8RN6Lc9LYyyyi-oE7eVOZfjfe8AKJIQ8u3SnPmUce-LjoZRw"
-
 @st.cache_resource
-def init_ai_engine():
+def init_ai():
     if not API_KEY: return None
     try:
         genai.configure(api_key=API_KEY)
-        # 🌟 지혜님 계정에서 사용 가능한 모델 리스트를 탐색하여 가장 적합한 것을 자동 선택합니다.
-        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        
-        # 1.5-flash -> 1.0-pro -> gemini-pro 순으로 우선순위 탐색
-        target_model = 'models/gemini-1.5-flash'
-        if target_model not in available_models:
-            target_model = next((m for m in available_models if 'gemini-1.5' in m), 
-                           next((m for m in available_models if 'gemini-pro' in m), available_models[0]))
-        
-        return genai.GenerativeModel(target_model)
-    except Exception as e:
-        return None
+        return genai.GenerativeModel('gemini-1.5-flash')
+    except: return None
 
-ai_engine = init_ai_engine()
+ai_engine = init_ai()
 
 @st.cache_data
 def load_font():
@@ -58,8 +47,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# 🌟 [긴급 복구] 왼쪽 메뉴 실종 대비 상단 버튼
+if st.button("🆘 왼쪽 메뉴가 안 보이면 클릭 (화면 강제 복구)"):
+    st.rerun()
+
 # 3. 사이드바
-st.sidebar.title("🚀 AE Total Tool v12.0")
+st.sidebar.title("🚀 AE Total Tool v12.1")
 st.sidebar.markdown('<p class="menu-header">📋 내부 히스토리 관리</p>', unsafe_allow_html=True)
 m_int = st.sidebar.radio("항목", ["광고주 DB 관리", "관리 이력 입력", "디지털 리포트(내부)"], label_visibility="collapsed")
 st.sidebar.markdown('<div style="margin-bottom: 50px;"></div>', unsafe_allow_html=True)
@@ -68,7 +61,7 @@ m_ext = st.sidebar.checkbox("📊 Trend Radar (AI)", value=True)
 
 menu = "📊 Trend Radar(외부)" if m_ext else m_int
 
-# [내부 데이터 관리 로직]
+# [내부 관리 로직]
 if menu == "광고주 DB 관리":
     st.header("📂 데이터 로드 및 관리")
     c1, c2 = st.columns(2)
@@ -120,36 +113,37 @@ elif menu == "디지털 리포트(내부)":
             wc = WordCloud(font_path=FONT_PATH, width=900, height=500, background_color='white').generate(words)
             fig, ax = plt.subplots(); ax.imshow(wc); ax.axis('off'); st.pyplot(fig)
 
-# --- [외부 Trend Radar - 자동 탐색 AI 엔진 적용] ---
+# --- [외부 Trend Radar - 에러 처리 강화] ---
 elif menu == "📊 Trend Radar(외부)":
-    st.header("🌐 AI Trend Radar v12.0")
+    st.header("🌐 AI Trend Radar v12.1")
     t_news, t_srch = st.tabs(["📰 뉴스 AI 분석", "🔍 검색 AI 분석"])
     
     with t_news:
         c1, c2 = st.columns([3, 1])
-        with c1: kw_n = st.text_input("뉴스 키워드", key="kn_v12")
-        with c2: prd_n = st.selectbox("수집 기간", ["3일", "7일", "30일", "90일"], key="pn_v12")
+        with c1: kw_n = st.text_input("뉴스 키워드", key="kn_final")
+        with c2: prd_n = st.selectbox("수집 기간", ["3일", "7일", "30일", "90일"], key="pn_final")
         if st.button("📰 뉴스 AI 분석 시작"):
-            with st.spinner("최적의 모델을 찾아 트렌드 분석 중..."):
+            with st.spinner("데이터 분석 중..."):
                 rss = f"https://news.google.com/rss/search?q={kw_n}&hl=ko&gl=KR&ceid=KR:ko"
                 items = BeautifulSoup(requests.get(rss).text, 'xml').find_all('item')[:15]
                 titles = [re.split(r' - | \| ', i.title.get_text())[0] for i in items]
                 if titles:
                     if ai_engine:
                         try:
-                            resp = ai_engine.generate_content(f"키워드 '{kw_n}' 관련 뉴스 제목들 분석. AE 전략 3줄 요약:\n\n" + "\n".join(titles))
+                            resp = ai_engine.generate_content(f"키워드 '{kw_n}' 관련 뉴스 제목들 분석해 AE 전략 리포트 작성해줘:\n" + "\n".join(titles))
                             st.markdown(f'<div class="ai-report-card"><b>🤖 AI 트렌드 리포트</b><br><br>{resp.text}</div>', unsafe_allow_html=True)
-                        except Exception as e: st.error(f"AI 호출 오류: {e}")
-                    else: st.warning("사용 가능한 AI 모델을 찾지 못했습니다.")
+                        except Exception as e:
+                            if "429" in str(e): st.error("🚨 [사용량 초과] 구글 무료 AI 할당량을 다 썼습니다. 1~5분 뒤 다시 눌러주세요.")
+                            else: st.error(f"AI 호출 오류: {e}")
                     wc = WordCloud(font_path=FONT_PATH, width=900, height=450, background_color='white').generate(" ".join(titles))
                     fig, ax = plt.subplots(); ax.imshow(wc); ax.axis('off'); st.pyplot(fig)
 
     with t_srch:
         cs1, cs2 = st.columns([3, 1])
-        with cs1: kw_s = st.text_input("검색 키워드", key="ks_v12")
-        with cs2: prd_s = st.selectbox("수집 기간", ["3일", "7일", "30일", "90일"], key="ps_v12")
+        with cs1: kw_s = st.text_input("검색 키워드", key="ks_final")
+        with cs2: prd_s = st.selectbox("수집 기간", ["3일", "7일", "30일", "90일"], key="ps_final")
         if st.button("🔍 검색 AI 분석 시작"):
-            with st.spinner("소비자 고민 분석 중..."):
+            with st.spinner("소비자 관심 분석 중..."):
                 rss_s = f"https://news.google.com/rss/search?q={kw_s}&hl=ko&gl=KR&ceid=KR:ko"
                 items_s = BeautifulSoup(requests.get(rss_s).text, 'xml').find_all('item')[:15]
                 titles_s = [i.title.get_text() for i in items_s]
@@ -157,8 +151,10 @@ elif menu == "📊 Trend Radar(외부)":
                     clean = " ".join(re.findall(r'[가-힣]+', " ".join(titles_s)))
                     if ai_engine:
                         try:
-                            resp_s = ai_engine.generate_content(f"'{kw_s}' 검색어 기반 유저 고민과 니즈 분석:\n\n" + clean)
+                            resp_s = ai_engine.generate_content(f"'{kw_s}' 유저 관심사 분석 리포트:\n" + clean)
                             st.markdown(f'<div class="ai-report-card"><b>🤖 소비자 관심 분석 AI 리포트</b><br><br>{resp_s.text}</div>', unsafe_allow_html=True)
-                        except Exception as e: st.error(f"AI 호출 오류: {e}")
+                        except Exception as e:
+                            if "429" in str(e): st.error("🚨 [사용량 초과] 무료 API 할당량을 다 썼습니다. 잠시 후 다시 시도해 주세요.")
+                            else: st.error(f"AI 호출 오류: {e}")
                     wc_s = WordCloud(font_path=FONT_PATH, width=900, height=450, background_color='white', colormap='YlOrRd').generate(clean)
                     fig_s, ax_s = plt.subplots(); ax_s.imshow(wc_s); ax_s.axis('off'); st.pyplot(fig_s)
